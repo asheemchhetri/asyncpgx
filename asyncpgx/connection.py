@@ -27,6 +27,25 @@ class ConnectionX(asyncpg.connection.Connection):
     async def named_execute(self, query: str, args: typing.Dict, timeout: typing.Optional[float] = None) -> str:
         """Extended versions of `execute` with support of the named
         parameters."""
+        # Convert the received query in the parameter to all lower-case
+        query = query.lower()
+        # Fetch the column string that is passed as part of INTO clause
+        query_columns = query.split('into')[1].split('values')[0].strip()
+        # Convert the column into list for further detailed logging
+        columns = [column.strip() for column in query_columns[query_columns.index('(') + 1:-1].split(',')]
+
+        number_of_columns = len(columns)
+        number_of_values = len(list(args.keys()))
+
+        missing_columns = set(columns) - set(args.keys())
+
+        # Scenario: When the value passed in parameter do not match the number of columns
+        if number_of_values < number_of_columns:
+            raise KeyError('Values missing. Columns that are missing values: {0}'.format(missing_columns))
+        # Scenario: When the expected column id is not received
+        if 'id' not in args:
+            raise KeyError('Expected column name-> id :: Provided column name-> {}'.format(list(args.keys())[0]))
+
         converted_query, asyncpg_args = self._prepare_asyncpg_parameters(
             query, args, query_module.QueryParamsDictConverter()
         )
